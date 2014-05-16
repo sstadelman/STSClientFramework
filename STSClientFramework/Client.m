@@ -9,7 +9,23 @@
 #import "Client.h"
 #import "Client+ConfigureModels.h"
 
-#import "MyObject.h"
+//EPM
+#import "BusinessPartner.h"
+#import "SalesOrder.h"
+#import "Contact.h"
+#import "LineItem.h"
+
+//Flights
+#import "Carrier.h"
+#import "FlightDetails.h"
+
+
+#import "SODataOnlineStore.h"
+#import "SODataOnlineStoreDelegate.h"
+#import "SODataRequestCredentialsDelegate.h"
+#import "SODataUserCredentials.h"
+
+#import "STSODataOnlineStore.h"
 
 @interface Client() <NSURLSessionDelegate> {
 }
@@ -33,6 +49,31 @@
 -(instancetype)init
 {
     if (self == [super init]) {
+        NSError *err;
+        if (![[[NSUserDefaults standardUserDefaults] valueForKey:@"isOffline"] boolValue]) {
+            // if not set for offline, use an online store
+            self.store = (STSODataOnlineStore *)[[STSODataOnlineStore alloc] initWithURL:[NSURL URLWithString:kServiceRoot]];
+            [(STSODataOnlineStore *)self.store setOnlineStoreDelegate:self.store]; // Set the storeDelegate. This will be called when the open finishes / fails.
+           [(STSODataOnlineStore *)self.store setRequestCredentialsDelegate:self.store]; //This delegate will be called for the credentials
+            
+            self.store = [[SODataOnlineStore alloc] initWithURL:[NSURL URLWithString:kServiceRoot]];
+            [(SODataOnlineStore *)self.store setOnlineStoreDelegate:self]; // Set the storeDelegate. This will be called when the open finishes / fails.
+            [(SODataOnlineStore *)self.store setRequestCredentialsDelegate:self]; //This delegate will be called for the credentials
+            [(SODataOnlineStore *)self.store openStoreWithError:&err];
+            
+        } else {
+            // if set for offline, use an offline store
+            self.store = (SODataOfflineStore *)[[SODataOfflineStore alloc] init];
+            SODataOfflineStoreOptions *opts = [[SODataOfflineStoreOptions alloc] init];
+            opts.serviceRoot = kServiceRoot;
+            
+        }
+        if (err != nil) {
+            NSLog(@"err = %@", [err localizedDescription]);
+        }
+        
+        
+        
         return self;
     }
     return nil;
@@ -40,7 +81,7 @@
 
 
 // Fetch objects, using NSURLSession
-
+/*
 + (RACReplaySubject *)fetchSomeObjects:(NSDictionary *)parameters
 {
     RACReplaySubject *subject = [RACReplaySubject subject];
@@ -69,10 +110,71 @@
     }];
     return subject;
 }
+*/
+
+// Fetch objects, using SODataOnlineStore
+
++ (RACReplaySubject *)fetchCarriers
+{
+    RACReplaySubject *subject = [RACReplaySubject subject];
+    
+    NSString *resourceString = @"CarrierCollection";
+    
+    [[Client sharedClient] scheduleRequestForResource:resourceString withMethod:@"GET" withCompletion:^(NSArray *entities) {
+        
+        if (entities) {
+            [subject sendNext:[[[entities rac_sequence] map:^id(NSDictionary *value) {
+                Carrier *model = [Carrier new];
+                [Client configureCarrierModel:model withDictionary:value];
+                
+                return model;
+            }] array]];
+            [subject sendCompleted];
+        } else {
+            [subject sendError:nil];
+        }
+    }];
+    return subject;
+}
+
+-(void)scheduleRequestForResource:(NSString *)resourcePath withMethod:(NSString *) method withCompletion:(void(^)(NSArray *array))completion
+{
+    //supported modes:  READ || GET, CREATE, UPDATE, PATCH, DELETE
+    int mode = 0;
+    if ([method isEqualToString:@"READ"] || [method isEqualToString:@"GET"]) {
+        mode = 1;
+    } else if ([method isEqualToString:@"CREATE"]) {
+        mode = 2;
+    } else if ([method isEqualToString:@"UPDATE"]) {
+        mode = 3;
+    } else if ([method isEqualToString:@"PATCH"]) {
+        mode = 4;
+    } else if ([method isEqualToString:@"DELETE"]) {
+        mode = 5;
+    } else {
+        //die
+        NSLog(@"Supported methods are: READ || GET, CREATE, UPDATE, PATCH, DELETE");
+        abort();
+    }
+    
+    SODataRequestParamSingleDefault *thisRequest = [[SODataRequestParamSingleDefault alloc] initWithMode:SODataRequestModeRead resourcePath:resourcePath];
+    [thisRequest setResponseType:SODataTypeEntitySet name:resourcePath];
+    
+    [self.store scheduleRequest:thisRequest completionHandler:^(id<SODataEntitySet> entities, id<SODataRequestExecution> requestExecution, NSError *error) {
+        if (!error) {
+            if ([entities entities]) {
+                completion([entities entities]);
+            } else {
+                completion(nil);
+            }
+        } else {
+            NSLog(@"ALERT ERROR %@", error);
+        }
+    }];
+}
 
 
-
-
+/*
 #pragma mark Network APIs
 -(void)download:(NSString *)urlString withCompletion:(void(^)(NSData *data))completion
 {
@@ -145,6 +247,6 @@
 {
     NSLog(@"did complete with error = %@", [error description]);
 }
-
+*/
 
 @end

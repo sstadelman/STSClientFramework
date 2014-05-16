@@ -7,13 +7,25 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "SODataStore.h"
+#import "SODataStoreSync.h"
+#import "SODataStoreAsync.h"
 
 @interface Client : NSObject
+
+@property (nonatomic) id <SODataStore, SODataStoreSync, SODataStoreAsync> store;
 
 +(instancetype)sharedClient;
 
 + (RACSignal *)fetchSomeObjects:(NSDictionary *)parameters;
 
--(void)download:(NSString *)urlString withCompletion:(void(^)(NSData *data))completion;
+
+//Flights
+
++ (RACSignal *)fetchCarriers;
+-(void)scheduleRequestForResource:(NSString *)resourcePath withMethod:(NSString *) method withCompletion:(void(^)(NSArray *array))completion;
+
+//Used with NSURLSession, directly
+//-(void)download:(NSString *)urlString withCompletion:(void(^)(NSData *data))completion;
 
 @end
